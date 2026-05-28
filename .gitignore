@@ -1,0 +1,7 @@
+.env
+node_modules
+.env.example
+dist/
+
+# ❗ Allow example file (important)
+!.env.example
