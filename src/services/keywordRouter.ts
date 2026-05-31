@@ -101,9 +101,17 @@ const SELF_ID_PHRASES = [
 ];
 
 /**
- * Question words/patterns that strongly indicate the user is
- * asking about the film, NOT identifying themselves.
+ * Matches "I am / I'm / im / iam / i m" — including common typos and missing
+ * apostrophes — followed by optional filler words (also, actually, really,
+ * now, indeed, too) and then "a / an / also". Catches identity statements the
+ * fixed phrase list misses, e.g.:
+ *   "i am also a producer", "i'm actually an editor", "im really a director",
+ *   "i m a producer", "iam an investor".
+ *
+ * The leading group covers: i'm | im | iam | "i am" | "i m" (i + space + m).
  */
+const SELF_ID_REGEX =
+  /\bi\s*(?:'?m|am)\b\s+(?:also|actually|really|now|indeed|too)?\s*(?:a|an|also)\b/;
 const QUESTION_PATTERNS = [
   "who is ",
   "who are ",
@@ -180,8 +188,11 @@ export const detectSelfIdentification = (
     return null;
   }
 
-  // Check if message contains self-identifying language
-  const hasSelfId = SELF_ID_PHRASES.some((phrase) => text.includes(phrase));
+  // Check if message contains self-identifying language —
+  // either a fixed phrase or the filler-tolerant "i am [also/actually] a ..." pattern.
+  const hasSelfId =
+    SELF_ID_PHRASES.some((phrase) => text.includes(phrase)) ||
+    SELF_ID_REGEX.test(text);
   if (!hasSelfId) {
     return null;
   }

@@ -226,8 +226,17 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
     // misclassifying questions like "Who is the director?" as CREATIVE
     const keywordMatch = detectSelfIdentification(trimmedMessage);
 
-    if (keywordMatch && keywordMatch !== conversation.currentFlow) {
-      // User explicitly identified as a professional — switch flow
+    // Only upgrade a fan (GENERAL) who reveals professional intent.
+    // Once a user is already in a professional flow, a later self-id phrase
+    // (e.g. "I want to collaborate" mid-PRODUCER) must NOT reset their
+    // progress — that would bounce them out of the funnel before the
+    // contact-capture step at PROFESSIONAL_REPLY_LIMIT.
+    if (
+      keywordMatch &&
+      keywordMatch !== conversation.currentFlow &&
+      conversation.currentFlow === "GENERAL"
+    ) {
+      // Fan revealed professional intent — switch flow
       console.log(
         `🔄 Flow upgrade: ${conversation.currentFlow} → ${keywordMatch} (keyword)`
       );
