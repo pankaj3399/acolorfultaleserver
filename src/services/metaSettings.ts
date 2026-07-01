@@ -128,20 +128,20 @@ const testConnection = async () => {
 
 /**
  * Get the active access token (used by the webhook service).
- * Falls back to env var if no DB settings exist.
+ * DB-only: the token is auto-refreshed, so there is no static env fallback.
  */
 const getAccessToken = async (): Promise<string | null> => {
   const settings = await MetaSettings.findOne().select("accessToken").lean();
-  return settings?.accessToken ?? process.env.INSTAGRAM_ACCESS_TOKEN ?? null;
+  return settings?.accessToken ?? null;
 };
 
 /**
  * Get the verify token (used by webhook verification).
- * Falls back to env var if no DB settings exist.
+ * DB-only: configured via Meta Settings, so there is no env fallback.
  */
 const getVerifyToken = async (): Promise<string | null> => {
   const settings = await MetaSettings.findOne().select("verifyToken").lean();
-  return settings?.verifyToken ?? process.env.INSTAGRAM_VERIFY_TOKEN ?? null;
+  return settings?.verifyToken ?? null;
 };
 
 /**
