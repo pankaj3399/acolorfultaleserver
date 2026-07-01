@@ -2,7 +2,7 @@
  * Instagram Graph API helpers for sending messages via the Messenger platform.
  */
 
-const GRAPH_API_BASE = "https://graph.instagram.com/v18.0/me/messages";
+const GRAPH_API_BASE = "https://graph.instagram.com/v25.0/me/messages";
 
 const graphFetch = async (accessToken: string, body: object) => {
   const started = Date.now();
