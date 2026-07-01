@@ -4,6 +4,36 @@
 
 const GRAPH_API_BASE = "https://graph.instagram.com/v25.0/me/messages";
 
+/**
+ * Fetch a messaging participant's public profile by their IG-scoped ID.
+ * The messaging webhook only provides the sender's ID, not their handle.
+ * Returns {} on any failure so callers can degrade gracefully.
+ */
+export const fetchInstagramUserProfile = async (
+  accessToken: string,
+  igScopedId: string
+): Promise<{ username?: string; name?: string }> => {
+  const url = `https://graph.instagram.com/v25.0/${igScopedId}?fields=username,name&access_token=${accessToken}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(
+        "[IG] profile.fetch-error",
+        JSON.stringify({ status: res.status, response: await res.text() })
+      );
+      return {};
+    }
+    const data = (await res.json()) as { username?: string; name?: string };
+    return { username: data.username, name: data.name };
+  } catch (err) {
+    console.error(
+      "[IG] profile.fetch-threw",
+      err instanceof Error ? err.message : String(err)
+    );
+    return {};
+  }
+};
+
 const graphFetch = async (accessToken: string, body: object) => {
   const started = Date.now();
   let res: Response;
