@@ -91,6 +91,50 @@ const DRAIN_MAX_TOTAL_MS = 8_000;
 const BURST_MAX_MESSAGES = 10;
 const BURST_MAX_CHARS = 4000;
 
+// Instagram rejects a single DM longer than 1000 characters
+// (IGApiException code 100, subcode 2534038). Long AI replies are split into
+// several messages sent in order.
+const MAX_IG_MESSAGE_CHARS = 1000;
+
+/**
+ * Split text into chunks of at most `maxLen` characters, preferring to break
+ * on paragraph, then line, then sentence, then word boundaries. Falls back to
+ * a hard slice only for an unbroken run longer than `maxLen`.
+ */
+const splitIntoChunks = (text: string, maxLen: number): string[] => {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLen) return trimmed ? [trimmed] : [];
+
+  for (const sep of ["\n\n", "\n", ". ", " "]) {
+    if (!trimmed.includes(sep)) continue;
+    const chunks: string[] = [];
+    let current = "";
+    for (const part of trimmed.split(sep)) {
+      const candidate = current ? current + sep + part : part;
+      if (candidate.length <= maxLen) {
+        current = candidate;
+      } else {
+        if (current) chunks.push(current);
+        if (part.length > maxLen) {
+          chunks.push(...splitIntoChunks(part, maxLen));
+          current = "";
+        } else {
+          current = part;
+        }
+      }
+    }
+    if (current) chunks.push(current);
+    if (chunks.every((c) => c.length <= maxLen)) return chunks;
+  }
+
+  // No usable separator (one very long token) — hard slice.
+  const chunks: string[] = [];
+  for (let i = 0; i < trimmed.length; i += maxLen) {
+    chunks.push(trimmed.slice(i, i + maxLen));
+  }
+  return chunks;
+};
+
 const appendToBuffer = async (
   key: string,
   text: string,
@@ -707,26 +751,45 @@ const processAIResponse = async (
   log("ai.saved", { senderId, status: conversation.status, messageStep: conversation.messageStep });
 
   // ── Send reply via Instagram Graph API (with retry) ──
-  log("ai.send.start", { senderId, replyLen: replyText.length });
+  // Instagram caps a single DM at 1000 chars, so long replies go out as
+  // several ordered messages. If one chunk fails after all retries we stop,
+  // to avoid delivering the reply out of order.
+  const chunks = splitIntoChunks(replyText, MAX_IG_MESSAGE_CHARS);
+  log("ai.send.start", { senderId, replyLen: replyText.length, chunkCount: chunks.length });
   const SEND_MAX_ATTEMPTS = 3;
-  for (let attempt = 1; attempt <= SEND_MAX_ATTEMPTS; attempt++) {
-    try {
-      const res = await sendInstagramMessage(accessToken, senderId, replyText);
-      log("ai.send.done", { senderId, ok: res.ok, status: res.status, attempt });
-      if (res.ok) break;
-      if (attempt < SEND_MAX_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 500 * attempt));
-        continue;
-      }
-      logErr("ai.send.failed-final", new Error(`Send failed after ${SEND_MAX_ATTEMPTS} attempts`), {
-        senderId,
-        status: res.status,
-      });
-    } catch (err) {
-      logErr("ai.send.threw", err, { senderId, attempt });
-      if (attempt < SEND_MAX_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 500 * attempt));
-        continue;
+
+  chunkLoop: for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    for (let attempt = 1; attempt <= SEND_MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await sendInstagramMessage(accessToken, senderId, chunk);
+        log("ai.send.done", {
+          senderId,
+          ok: res.ok,
+          status: res.status,
+          attempt,
+          chunk: i + 1,
+          chunkCount: chunks.length,
+        });
+        if (res.ok) break;
+        if (attempt < SEND_MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+          continue;
+        }
+        logErr("ai.send.failed-final", new Error(`Send failed after ${SEND_MAX_ATTEMPTS} attempts`), {
+          senderId,
+          status: res.status,
+          chunk: i + 1,
+          chunkCount: chunks.length,
+        });
+        break chunkLoop;
+      } catch (err) {
+        logErr("ai.send.threw", err, { senderId, attempt, chunk: i + 1 });
+        if (attempt < SEND_MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+          continue;
+        }
+        break chunkLoop;
       }
     }
   }
