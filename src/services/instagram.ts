@@ -92,9 +92,10 @@ const BURST_MAX_MESSAGES = 10;
 const BURST_MAX_CHARS = 4000;
 
 // Instagram rejects a single DM longer than 1000 characters
-// (IGApiException code 100, subcode 2534038). Long AI replies are split into
-// several messages sent in order.
-const MAX_IG_MESSAGE_CHARS = 1000;
+// (IGApiException code 100, subcode 2534038). Chunk below that with headroom,
+// since Instagram's character counting may not match JS string length exactly
+// (emoji / combining marks / trailing whitespace near the boundary).
+const MAX_IG_MESSAGE_CHARS = 950;
 
 /**
  * Split text into chunks of at most `maxLen` characters, preferring to break
