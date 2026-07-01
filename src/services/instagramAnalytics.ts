@@ -104,14 +104,28 @@ const getConversations = async (query: ListQuery) => {
   const skip = (query.page - 1) * query.limit;
 
   const [rows, total] = await Promise.all([
-    InstagramConversation.find(match)
-      .select(
-        "instagramUserId profileType classificationSource status tags capturedData createdAt updatedAt"
-      )
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(query.limit)
-      .lean(),
+    // Aggregation (not find) so we can return messageCount without shipping the
+    // full messages array to the client.
+    InstagramConversation.aggregate([
+      { $match: match },
+      { $sort: { updatedAt: -1 } },
+      { $skip: skip },
+      { $limit: query.limit },
+      {
+        $project: {
+          instagramUserId: 1,
+          username: 1,
+          profileType: 1,
+          classificationSource: 1,
+          status: 1,
+          tags: 1,
+          capturedData: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          messageCount: { $size: { $ifNull: ["$messages", []] } },
+        },
+      },
+    ]),
     InstagramConversation.countDocuments(match),
   ]);
 

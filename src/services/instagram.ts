@@ -17,6 +17,7 @@ import {
 import {
   sendInstagramMessage,
   sendInstagramTypingIndicator,
+  fetchInstagramUserProfile,
 } from "./instagramApi";
 import metaSettingsService from "./metaSettings";
 import ProcessedMessage from "../models/processedMessage";
@@ -498,6 +499,18 @@ const processIncomingMessage = async (
 ) => {
   log("incoming.start", { senderId, pageId, messageTextLen: messageText.length });
   const conversation = await getOrCreateConversation(senderId, pageId);
+
+  // Resolve the sender's Instagram handle once (webhook only gives the ID).
+  // Set in memory here; the downstream conversation.save() in the AI pipeline
+  // persists it. Best-effort — never block a reply on this.
+  if (!conversation.username) {
+    const profile = await fetchInstagramUserProfile(accessToken, senderId);
+    const handle = profile.username ?? profile.name;
+    if (handle) {
+      conversation.username = handle;
+      log("profile.username-resolved", { senderId, username: handle });
+    }
+  }
 
   // Process the message through the AI pipeline (same logic as chatbot).
   // Typing indicator was already sent by the drainer at burst start.

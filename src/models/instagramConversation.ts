@@ -4,6 +4,8 @@ import { IntentCategory, MessageRecord, ConversationStatus, ConversationTag } fr
 export interface IInstagramConversation extends Document {
   /** Instagram-scoped user ID (sender) */
   instagramUserId: string;
+  /** Sender's Instagram handle/name, resolved from the Graph API (webhook only gives the ID) */
+  username: string | null;
   /** Instagram page/account ID that received the message */
   instagramPageId: string;
   currentFlow: IntentCategory | null;
@@ -34,6 +36,7 @@ const messageSchema = new Schema<MessageRecord>(
 const instagramConversationSchema = new Schema<IInstagramConversation>(
   {
     instagramUserId: { type: String, required: true, index: true },
+    username: { type: String, default: null },
     instagramPageId: { type: String, required: true, index: true },
     currentFlow: {
       type: String,
