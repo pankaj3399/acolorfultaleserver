@@ -535,6 +535,21 @@ const processAIResponse = async (
 
   const contactData = extractContactData(trimmedMessage);
 
+  // Capture contact info the moment it appears, regardless of flow. A
+  // GENERAL/fan user can also share an email/phone — e.g. after asking about
+  // the director/casting/budget, which the safety rules route to "drop your
+  // email here." Running this before the branch logic means every path
+  // persists it (previously capture was gated to professional flows only, so
+  // emails from GENERAL conversations were silently dropped).
+  if (contactData.email) {
+    conversation.capturedData.email = contactData.email;
+    conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
+  }
+  if (contactData.phone) {
+    conversation.capturedData.phone = contactData.phone;
+    conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
+  }
+
   // ── Completed conversation ──
   if (conversation.status === "COMPLETED") {
     log("ai.branch.completed", {
@@ -544,16 +559,7 @@ const processAIResponse = async (
       hasPhone: Boolean(contactData.phone),
       note: "no reply will be sent — conversation already COMPLETED",
     });
-    if (conversation.currentFlow && conversation.currentFlow !== "GENERAL") {
-      if (contactData.email) {
-        conversation.capturedData.email = contactData.email;
-        conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
-      }
-      if (contactData.phone) {
-        conversation.capturedData.phone = contactData.phone;
-        conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
-      }
-    }
+    // Contact info (if any) was already captured above, regardless of flow.
     await conversation.save();
     return;
   }
@@ -651,17 +657,7 @@ const processAIResponse = async (
     }
   }
 
-  // ── Capture contact data for professional flows ──
-  if (conversation.currentFlow !== "GENERAL") {
-    if (contactData.email) {
-      conversation.capturedData.email = contactData.email;
-      conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
-    }
-    if (contactData.phone) {
-      conversation.capturedData.phone = contactData.phone;
-      conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
-    }
-  }
+  // (Contact data is captured near the top of this function, for every flow.)
 
   // Safety: currentFlow must be set by now
   if (!conversation.currentFlow) {
