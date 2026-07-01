@@ -98,7 +98,7 @@ const testConnection = async () => {
   }
 
   const res = await fetch(
-    `https://graph.instagram.com/v18.0/me?fields=id,name,username&access_token=${settings.accessToken}`
+    `https://graph.instagram.com/v25.0/me?fields=id,name,username&access_token=${settings.accessToken}`
   );
 
   if (!res.ok) {
